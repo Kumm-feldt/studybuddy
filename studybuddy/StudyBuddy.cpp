@@ -23,7 +23,7 @@ struct StudyGroup {
     char name[100] = "";
     char loc[100] = "";
 
-
+// this is a comment
    
     char courses[100][100];
     char members[100][100];
