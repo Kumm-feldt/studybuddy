@@ -23,7 +23,7 @@ struct StudyGroup {
     char name[100] = "";
     char loc[100] = "";
 
-// this is a comment
+
    
     char courses[100][100];
     char members[100][100];
@@ -98,6 +98,8 @@ int mainClient() {
     ServerStruct servers[100];
  
     cout << "Enter your name: ";
+    cin.ignore(); // Clear the newline
+
     cin.getline(clientName, sizeof(clientName));
 
     // Broadcast "Who?"
@@ -111,8 +113,7 @@ int mainClient() {
     }
     else {
         cout << "No servers available\n";
-        closesocket(StudySocket);
-        WSACleanup();
+        
         return 1;
     }
 
@@ -139,41 +140,74 @@ int mainClient() {
 
     char recvbuf[DEFAULT_BUFLEN];  // Buffer for received data
     char sendbuf[DEFAULT_BUFLEN];  // Buffer for data to send
-    
-    cout << "\nType your message (or 'Exit' to quit):\n";
-    cin.getline(sendbuf, DEFAULT_BUFLEN);
+    cout << "\nOptions:\n";
+    cout << "1. Ask for location (Where?)\n";
+    cout << "2. Ask for courses (What?)\n";
+    cout << "3. Ask for members (Members?)\n";
+    cout << "4. Join this group (Join=yourname)\n";
+    cout << "5. Exit\n";
+    cout << "Enter your choice: ";
 
-    // Copy contents of sendbuf into sendbuf_ and convert to Uppercase
-    char sendbuf_[DEFAULT_BUFLEN];
-    strcpy_s(sendbuf_, DEFAULT_BUFLEN, sendbuf);
-    toUpper(sendbuf_);
+    int choice;
+    cin >> choice;
+    cin.ignore(); // Clear the newline
+    bool joinedGroup = false;
+    while (!joinedGroup) {
+        // Copy contents of sendbuf into sendbuf_ and convert to Uppercase
+        char sendbuf_[DEFAULT_BUFLEN];
 
-
-    while (strcmp(sendbuf_, "EXIT") != 0) {
-
-        // Send message to server (+1 to include null terminator)
-        iResult = sendto(StudySocket, sendbuf, 
-            strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
-
-        if (iResult == SOCKET_ERROR) {  // Check send failure
-            cout << "Send failed: " << WSAGetLastError() << endl;
-            closesocket(StudySocket);
-            WSACleanup();
-            return 1;
+        switch (choice) {
+        case 1: // Where?
+            strcpy_s(sendbuf, DEFAULT_BUFLEN, "Where?");
+            break;
+        case 2: // What?
+            strcpy_s(sendbuf, DEFAULT_BUFLEN, "What?");
+            break;
+        case 3: // Members?
+            strcpy_s(sendbuf, DEFAULT_BUFLEN, "Members?");
+            break;
+        case 4: // Join
+            strcpy_s(sendbuf, DEFAULT_BUFLEN, "Join=");
+            strcat_s(sendbuf, DEFAULT_BUFLEN, clientName);
+            break;
+        case 5: // Exit
+            strcpy_s(sendbuf, DEFAULT_BUFLEN, "Exit");
+            break;
+        default:
+            cout << "Invalid choice!\n";
+            continue;
         }
+       
 
+            // Send message to server (+1 to include null terminator)
+            iResult = sendto(StudySocket, sendbuf,
+                strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
 
-
+            if (iResult == SOCKET_ERROR) {  // Check send failure
+                cout << "Send failed: " << WSAGetLastError() << endl;
+                closesocket(StudySocket);
+                WSACleanup();
+                return 1;
+            }
 
             int counter = 0;
-            while (true) {
+
                 // Wait for response
                 int waitResponse = wait(StudySocket, 2, 0);
 
                 if (waitResponse == 1) { // check wait failure
-                
+
                     // Receive response from server
                     iResult = recvfrom(StudySocket, recvbuf, DEFAULT_BUFLEN, 0, (struct sockaddr*)&senderAddr, &senderAddrSize);
+
+
+                    // If we joined the group successfully
+                    if (choice == 4 && strcmp(recvbuf, "Join!") == 0) {
+                        cout << "Successfully joined the study group!\n";
+                        joinedGroup = true;
+                        break;
+                    }
+
 
                     if (iResult > 0) {  // Success
                         cout << recvbuf << '\0';
@@ -187,23 +221,23 @@ int mainClient() {
                 }
                 else if (waitResponse == 0) {
                     // Timeout
-                    
+
                     break;
                 }
                 else {
                     break;
                 }
-            
-        }
 
-            cout << "\nType your message (or 'Exit' to quit):\n";
-            cin.getline(sendbuf, DEFAULT_BUFLEN);
+            }
 
-            // Copy contents of sendbuf into sendbuf_ and convert to Uppercase
-            char sendbuf_[DEFAULT_BUFLEN];
-            strcpy_s(sendbuf_, DEFAULT_BUFLEN, sendbuf);
-            toUpper(sendbuf_);
-    }
+        cout << "\nType your message (or 'Exit' to quit):\n";
+        cin.getline(sendbuf, DEFAULT_BUFLEN);
+
+        // Copy contents of sendbuf into sendbuf_ and convert to Uppercase
+        char sendbuf_[DEFAULT_BUFLEN];
+        strcpy_s(sendbuf_, DEFAULT_BUFLEN, sendbuf);
+        toUpper(sendbuf_);
+   
 
 
     // ---------------------------
@@ -271,122 +305,123 @@ int mainHost()   {
     int senderAddrSize = sizeof(senderAddr);
 
     cout << "Enter Name: " << "\n";
+    cin.ignore(); // Clear any leftover newlines
     cin.getline(clientName, sizeof(clientName));
 
 
-    if (!group.serverTaken) {
+
       
-        strcpy_s(group.name, sizeof(group.name), clientName);
+    strcpy_s(group.name, sizeof(group.name), clientName);
 
-        cout << "Enter Location: " << "\n";
-        cin.getline(group.loc, sizeof(group.loc));
+    cout << "Enter Location: " << "\n";
+    cin.getline(group.loc, sizeof(group.loc));
 
-        char course[100] = "";
+    char course[100] = "";
 
-        cout << "Enter Course(s): " << "\n";
+    cout << "Enter course(s) in PREFIX XXXX format (empty line to finish):\n";
 
-        while (cin.getline(course, sizeof(course)) && group.coursesCounter < 100) {
-            if (course[0] == '\0') {
-                break;
-            }
-            strcpy_s(group.courses[group.coursesCounter], sizeof(group.courses[group.coursesCounter]), course);
-
-            group.coursesCounter++;
-
+    while (cin.getline(course, sizeof(course)) && group.coursesCounter < 100) {
+        if (course[0] == '\0') {
+            break;
         }
-        group.serverTaken = true;
+        strcpy_s(group.courses[group.coursesCounter], sizeof(group.courses[group.coursesCounter]), course);
+
+        group.coursesCounter++;
+
     }
+    
+    // Add host as the first member
+    strcpy_s(group.members[group.membersCounter], sizeof(group.members[group.membersCounter]), group.name);
+    group.membersCounter++;
 
+    group.serverTaken = true;
+    
 
+    cout << "Study group hosted succesfully! Waiting for queries...\n";
+    
     while (true) {
-        cout << "Options:\nWho? | Where? | What? | Members? | Join=servername \n";
         // Receive response from server
-        iResult = recvfrom(StudySocket, recvbuf, DEFAULT_BUFLEN, 0, (struct sockaddr*)&senderAddr, &senderAddrSize);
+        iResult = recvfrom(StudySocket, recvbuf, DEFAULT_BUFLEN-1, 0, 
+            (struct sockaddr*)&senderAddr, &senderAddrSize);
+
+        if (iResult == SOCKET_ERROR) {  // Check send failure
+            cout << "Recvfrom failed: " << WSAGetLastError() << endl;
+            continue;
+        }
+
+
 
         if (iResult > 0) {  // Success
+            recvbuf[iResult] = '\0'; // Ensure null termination
+            cout << "Received: " << recvbuf << "\n";
 
             if (strcmp(recvbuf, "Who?")==0) { 
                 
-                strcpy_s(sendbuf, DEFAULT_BUFLEN, group.name);
+                // Format: "Name=servername"
+                strcpy_s(sendbuf, DEFAULT_BUFLEN, "Name=");
+                strcat_s(sendbuf, DEFAULT_BUFLEN, group.name);
 
-                // Send message to server (+1 to include null terminator)
-                iResult = sendto(StudySocket, sendbuf, strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
-
-                if (iResult == SOCKET_ERROR) {  // Check send failure
-                    cout << "Send failed: " << WSAGetLastError() << endl;
-                    closesocket(StudySocket);
-                    WSACleanup();
-                    return 1;
-                }
+               
 
             }
-            else if (strcmp(recvbuf, "Where?")==0) {
-                strcpy_s(sendbuf, DEFAULT_BUFLEN, group.loc);
-
-                // Send message to server (+1 to include null terminator)
-                iResult = sendto(StudySocket, sendbuf, strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
-
-                if (iResult == SOCKET_ERROR) {  // Check send failure
-                    cout << "Send failed: " << WSAGetLastError() << endl;
-                    closesocket(StudySocket);
-                    WSACleanup();
-                    return 1;
-                }
+            else if (strcmp(recvbuf, "Where?") == 0) {
+                // Format: "Loc=location"
+                strcpy_s(sendbuf, DEFAULT_BUFLEN, "Loc=");
+                strcat_s(sendbuf, DEFAULT_BUFLEN, group.loc);
             }
-            else if (strcmp(recvbuf,"What?")==0) {
+            else if (strcmp(recvbuf, "What?") == 0) {
+                // Format: "Courses=course1\ncourse2\n..."
+                strcpy_s(sendbuf, DEFAULT_BUFLEN, "Courses=");
+
+                // Add all courses with newline delimiters
+                int pos = strlen(sendbuf);
                 for (int i = 0; i < group.coursesCounter; i++) {
-                    strcpy_s(sendbuf, DEFAULT_BUFLEN, group.courses[i]);
-
-                    // Send message to server (+1 to include null terminator)
-                    iResult = sendto(StudySocket, sendbuf, strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
-
-                    if (iResult == SOCKET_ERROR) {  // Check send failure
-                        cout << "Send failed: " << WSAGetLastError() << endl;
-                        closesocket(StudySocket);
-                        WSACleanup();
-                        return 1;
-                    }
+                    strcat_s(sendbuf, DEFAULT_BUFLEN, group.courses[i]);
+                    strcat_s(sendbuf, DEFAULT_BUFLEN, "\n");
                 }
-
             }
             else if (strcmp(recvbuf, "Members?")==0) {
+                // Format: "Members=member1\nmember2\n..."
+                strcpy_s(sendbuf, DEFAULT_BUFLEN, "Members=");
+
+                // Add all members with newline delimiters
                 for (int i = 0; i < group.membersCounter; i++) {
-                    strcpy_s(sendbuf, DEFAULT_BUFLEN, group.members[i]);
-
-                    // Send message to server (+1 to include null terminator)
-                    iResult = sendto(StudySocket, sendbuf, strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
-
-                    if (iResult == SOCKET_ERROR) {  // Check send failure
-                        cout << "Send failed: " << WSAGetLastError() << endl;
-                        closesocket(StudySocket);
-                        WSACleanup();
-                        return 1;
-                    }
+                    strcat_s(sendbuf, DEFAULT_BUFLEN, group.members[i]);
+                    strcat_s(sendbuf, DEFAULT_BUFLEN, "\n");
                 }
 
             }
             else if (strncmp(recvbuf, "Join=", 5)==0) {
-                char* result = recvbuf + 5; // skips the first 5 characters
+                char* clientName = recvbuf + 5; // skips the first 5 characters
 
-                strcpy_s(group.members[group.membersCounter], sizeof(group.members[group.membersCounter]), result);
+              
+
+                // Add client to members list
+                strcpy_s(group.members[group.membersCounter], sizeof(group.members[group.membersCounter]), clientName);
                 group.membersCounter++;
 
+                cout << "User '" << clientName << "' joined the group\n";
                 strcpy_s(sendbuf, DEFAULT_BUFLEN, "Join!");
-
-                // Send message to server (+1 to include null terminator)
-                iResult = sendto(StudySocket, sendbuf, strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
-
-                if (iResult == SOCKET_ERROR) {  // Check send failure
-                    cout << "Send failed: " << WSAGetLastError() << endl;
-                    closesocket(StudySocket);
-                    WSACleanup();
-                    return 1;
-                }
             }
             else if (strcmp(recvbuf, "Exit")==0) {
-                break;
-            }
+                cout << "Client requested to exit\n";
+                strcpy_s(sendbuf, DEFAULT_BUFLEN, "Program Exited");
 
+            }
+            else {
+                cout << "Unknow request...\n";
+                strcpy_s(sendbuf, DEFAULT_BUFLEN, "Unknown request");
+
+            }
+            // Send message to server (+1 to include null terminator)
+            iResult = sendto(StudySocket, sendbuf, strlen(sendbuf) + 1, 0, (struct sockaddr*)&senderAddr, senderAddrSize);
+
+            if (iResult == SOCKET_ERROR) {  // Check send failure
+                cout << "Send failed: " << WSAGetLastError() << endl;
+                closesocket(StudySocket);
+                WSACleanup();
+                return 1;
+            }
 
         }
         else if (iResult == 0) {  // Connection closed
@@ -416,20 +451,29 @@ int mainHost()   {
 
 
 int main() {
-    cout << "What do you want to do?\n";
-    char action[100];
-    cin.getline(action, sizeof(action));
-    toUpper(action);
-    if (strcmp(action,"HOST") ==0){
-        mainHost();
-    }
-    else if (strcmp(action,"JOIN")==0) {
-        mainClient();
-    }
-    else {
-        cout << "Invalid";
-    }  
+    int action = 0;
 
+    do {
+        cout << "Choose an option: (1) Join | (2) Host | (3) Exit\n";
+        cin >> action;
+
+        if (action == 1) {
+            mainClient();
+
+        }
+        else if (action == 2) {
+            mainHost();
+
+        }
+        else if(action == 3){
+            cout << "Program Exited";
+        }
+        else {
+            cout << "Invalid";
+        }
+
+    } while (action != 3);
+    
     return 0;
 
 }
